@@ -1,7 +1,7 @@
 import time
 import os
 from .base import BaseAdapter
-from shared.kafka_client import AuroraProducer
+from shared.kafka_client import AuroraProducer, AuroraConsumer
 from shared.elastic_client import AuroraElasticClient
 
 class ElasticsearchAdapter(BaseAdapter):
@@ -19,12 +19,17 @@ class ElasticsearchAdapter(BaseAdapter):
         es_client = AuroraElasticClient(self.es_hosts)
         producer = AuroraProducer(self.kafka_brokers)
         producer.ensure_topic(self.kafka_topic)
+        producer.ensure_topic("actions")
         
-        last_timestamp = "1970-01-01T00:00:00.000Z"
+        # 1. Ask Ledger for the last saved timestamp
+        last_timestamp = self._get_start_timestamp(producer)
+        print(f"  [{self.name}] Starting from: {last_timestamp}")
+        
+        last_sort = None
         
         try:
             while True:
-                hits = es_client.fetch_new_logs(self.es_index, last_timestamp)
+                hits, new_sort = es_client.fetch_new_logs(self.es_index, last_timestamp, last_sort=last_sort)
                 
                 if hits:
                     for hit in hits:
@@ -32,8 +37,13 @@ class ElasticsearchAdapter(BaseAdapter):
                         producer.send_log(self.kafka_topic, log_data)
                         last_timestamp = log_data['@timestamp']
                     
+                    last_sort = new_sort
                     producer.flush()
                     print(f"  [{self.name}] Published {len(hits)} logs.")
+                    
+                    # If we got a full batch, try to fetch more immediately without waiting
+                    if len(hits) >= 100:
+                        continue
                 
                 time.sleep(self.poll_interval)
         except Exception as e:
@@ -41,3 +51,61 @@ class ElasticsearchAdapter(BaseAdapter):
         finally:
             producer.close()
             es_client.close()
+
+    def _get_start_timestamp(self, producer):
+        """Requests last known timestamp from Ledger via 'actions' topic."""
+        import uuid
+        requester_id = f"ingestor-{self.name.lower()}-{uuid.uuid4().hex[:8]}"
+        
+        consumer = AuroraConsumer(
+            topics=["actions"],
+            group_id=f"init-{requester_id}",
+            bootstrap_servers=self.kafka_brokers,
+            auto_offset="latest"
+        )
+        
+        try:
+            # join the group and get assignments.
+            print(f"  [{self.name}] Connecting to 'actions' topic...")
+            for _ in range(5):
+                consumer.consumer.poll(timeout_ms=200)
+            
+            # 2. Send request
+            payload = {
+                "action": "get_last_unfiltered_timestamp",
+                "requester": requester_id
+            }
+            print(f"  [{self.name}] Requesting last timestamp from Ledger (req_id: {requester_id})...")
+            producer.send_log("actions", payload, key=f"request-{requester_id}")
+            producer.flush()
+            
+            start_time = time.time()
+            timeout = 10.0
+            
+            while time.time() - start_time < timeout:
+                messages = consumer.consumer.poll(timeout_ms=1000)
+                if not messages:
+                    continue
+                    
+                for _, msgs in messages.items():
+                    for msg in msgs:
+                        val = msg.value
+                        if (val.get("action") == "response_last_unfiltered_timestamp" and 
+                            val.get("requester") == requester_id):
+                            ts = val.get("timestamp")
+                            print(f"  [{self.name}] Received last timestamp from Ledger: {ts}")
+                            return ts
+                        else:
+                            other_action = val.get("action")
+                            other_req = val.get("requester")
+                            if other_req != requester_id:
+                                print(f"  [{self.name}] Skipping unrelated action: {other_action} from {other_req}")
+            
+            print(f"  [{self.name}] No Ledger response within {timeout}s. Starting from epoch.")
+            return "1970-01-01T00:00:00.000Z"
+            
+        except Exception as e:
+            print(f"  [{self.name}] Initialization error: {e}. Defaulting to epoch.")
+            return "1970-01-01T00:00:00.000Z"
+        finally:
+            consumer.close()

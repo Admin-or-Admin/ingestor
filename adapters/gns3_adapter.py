@@ -89,6 +89,7 @@ class GNS3Adapter(BaseAdapter):
         try:
             while True:
                 log_entry = self.generate_network_event()
+                print(f"  [{self.name}] Published {len(log_entry)} logs.")
                 producer.send_log(self.kafka_topic, log_entry)
                 time.sleep(self.sim_interval)
         except Exception as e:

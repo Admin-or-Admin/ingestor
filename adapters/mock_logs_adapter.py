@@ -27,11 +27,11 @@ class MockLogsAdapter(BaseAdapter):
             {"msg": "Potential brute force attack on /login endpoint from 103.45.12.98", "level": "WARNING", "status": 429}
         ]
         
-        if random.random() < 0.3:
-            event = random.choice(cyber_scenarios)
-            message, level, status = event["msg"], event["level"], event["status"]
-        else:
-            message, level, status = self.fake.sentence(), random.choice(levels), random.choice([200, 201, 400, 401, 404, 500])
+        event = random.choice(cyber_scenarios)
+        message, level, status = event["msg"], event["level"], event["status"]
+        # if random.random() < 0.9:
+        # else:
+        #     message, level, status = self.fake.sentence(), random.choice(levels), random.choice([200, 201, 400, 401, 404, 500])
 
         return {
             "@timestamp": datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z',
@@ -41,7 +41,7 @@ class MockLogsAdapter(BaseAdapter):
         }
 
     def run(self):
-        print(f"🚀 Ingestor: Starting {self.name} adapter...")
+        print(f"Ingestor: Starting {self.name} adapter...")
         while True:
             try:
                 log_entry = self.generate_mock_log()
