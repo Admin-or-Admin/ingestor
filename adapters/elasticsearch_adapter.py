@@ -34,8 +34,14 @@ class ElasticsearchAdapter(BaseAdapter):
                 if hits:
                     for hit in hits:
                         log_data = hit['_source']
+                        # Ensure standard fields exist for downstream
+                        ts = log_data.get("timestamp") or log_data.get("@timestamp")
+                        log_data["timestamp"] = ts
+                        if "source" not in log_data:
+                            log_data["source"] = "application"
+                            
                         producer.send_log(self.kafka_topic, log_data)
-                        last_timestamp = log_data['@timestamp']
+                        last_timestamp = ts
                     
                     last_sort = new_sort
                     producer.flush()

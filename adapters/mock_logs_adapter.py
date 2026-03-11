@@ -20,21 +20,24 @@ class MockLogsAdapter(BaseAdapter):
         levels = ["INFO", "WARNING", "ERROR", "DEBUG"]
         services = ["auth-service", "payment-gateway", "inventory-manager", "frontend-api", "web-proxy"]
         cyber_scenarios = [
-            {"msg": "SQL Injection attempt detected in query: SELECT * FROM users WHERE id = 1 OR 1=1", "level": "CRITICAL", "status": 403},
-            {"msg": "Cross-Site Scripting (XSS) detected in parameter 'user_id': <script>alert('XSS')</script>", "level": "CRITICAL", "status": 403},
-            {"msg": "Multiple failed login attempts for user 'admin' from IP 192.168.1.45", "level": "WARNING", "status": 401},
-            {"msg": "Unauthorized access attempt to /api/v1/admin/settings by user 'guest'", "level": "ERROR", "status": 403},
-            {"msg": "Potential brute force attack on /login endpoint from 103.45.12.98", "level": "WARNING", "status": 429}
+            {"msg": "SQL Injection attempt detected in query: SELECT * FROM users WHERE id = 1 OR 1=1", "level": "CRITICAL", "status": 403, "source": "application"},
+            {"msg": "Cross-Site Scripting (XSS) detected in parameter 'user_id': <script>alert('XSS')</script>", "level": "CRITICAL", "status": 403, "source": "application"},
+            {"msg": "Multiple failed login attempts for user 'admin' from IP 192.168.1.45", "level": "WARNING", "status": 401, "source": "auth"},
+            {"msg": "Unauthorized access attempt to /api/v1/admin/settings by user 'guest'", "level": "ERROR", "status": 403, "source": "application"},
+            {"msg": "Potential brute force attack on /login endpoint from 103.45.12.98", "level": "WARNING", "status": 429, "source": "auth"},
+            {"msg": "Port scan detected: 50 connection attempts to different ports from 192.168.1.200 in 2 seconds", "level": "HIGH", "status": 403, "source": "firewall"},
+            {"msg": "Suspicious process 'whoami' executed by user 'www-data' on frontend-api-v2", "level": "HIGH", "status": 200, "source": "endpoint"},
+            {"msg": "Large data transfer detected: 4.5GB sent to unknown IP 45.33.22.11 in 5 minutes", "level": "CRITICAL", "status": 200, "source": "network"},
+            {"msg": "Lateral movement attempt: SSH connection from 10.0.0.5 to 10.0.0.12 with user 'root'", "level": "CRITICAL", "status": 401, "source": "auth"},
+            {"msg": "DNS query for known malicious domain 'cryptolocker-c2-server.com' from 10.0.0.8", "level": "CRITICAL", "status": 200, "source": "dns"}
         ]
         
         event = random.choice(cyber_scenarios)
-        message, level, status = event["msg"], event["level"], event["status"]
-        # if random.random() < 0.9:
-        # else:
-        #     message, level, status = self.fake.sentence(), random.choice(levels), random.choice([200, 201, 400, 401, 404, 500])
+        message, level, status, source = event["msg"], event["level"], event["status"], event["source"]
 
         return {
-            "@timestamp": datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z',
+            "timestamp": datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z',
+            "source": source,
             "log.level": level, "message": message, "service.name": random.choice(services),
             "trace.id": str(uuid.uuid4()), "user.id": self.fake.user_name(),
             "http.response.status_code": status, "process.pid": random.randint(1000, 9999)
