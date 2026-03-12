@@ -18,6 +18,7 @@ class GNS3Adapter(BaseAdapter):
         self.kafka_topic = os.getenv("KAFKA_TOPIC", "logs.unfiltered")
         self.syslog_port = int(os.getenv("SYSLOG_PORT", "1514"))
         self.sim_interval = float(os.getenv("SIM_INTERVAL", "1.0"))
+        self.sim_enabled = os.getenv("GNS3_SIMULATION_ENABLED", "true").lower() == "true"
         self.fake = Faker()
 
     def generate_network_event(self):
@@ -67,11 +68,19 @@ class GNS3Adapter(BaseAdapter):
             while True:
                 data, addr = sock.recvfrom(4096)
                 msg = data.decode('utf-8', errors='ignore').strip()
+                
+                service_name = f"gns3-node-{addr[0]}"
+                if ": %" in msg:
+                    parts = msg.split(": ", 1)
+                    if len(parts) == 2:
+                        service_name = parts[0]
+                        msg = parts[1]
+
                 producer.send_log(self.kafka_topic, {
                     "@timestamp": datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z',
                     "log.level": "INFO",
                     "message": msg,
-                    "service.name": f"gns3-node-{addr[0]}",
+                    "service.name": service_name,
                     "trace.id": str(uuid.uuid4()),
                     "source.ip": addr[0]
                 })
@@ -84,14 +93,21 @@ class GNS3Adapter(BaseAdapter):
         producer.ensure_topic(self.kafka_topic)
         
         # Start Syslog in thread
-        threading.Thread(target=self.syslog_server, args=(producer,), daemon=True).start()
+        syslog_thread = threading.Thread(target=self.syslog_server, args=(producer,), daemon=True)
+        syslog_thread.start()
         
         try:
-            while True:
-                log_entry = self.generate_network_event()
-                print(f"  [{self.name}] Published {len(log_entry)} logs.")
-                producer.send_log(self.kafka_topic, log_entry)
-                time.sleep(self.sim_interval)
+            if self.sim_enabled:
+                print(f"  [{self.name}] Network simulation enabled (interval: {self.sim_interval}s)")
+                while True:
+                    log_entry = self.generate_network_event()
+                    producer.send_log(self.kafka_topic, log_entry)
+                    time.sleep(self.sim_interval)
+            else:
+                print(f"  [{self.name}] Network simulation disabled. Listener only.")
+                while True:
+                    # Keep main thread alive for syslog listener
+                    time.sleep(10)
         except Exception as e:
             print(f"  [{self.name}] Error: {e}")
         finally:

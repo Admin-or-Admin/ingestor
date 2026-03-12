@@ -71,10 +71,14 @@ class ElasticsearchAdapter(BaseAdapter):
         )
         
         try:
-            # join the group and get assignments.
+            # Join the group and get assignments.
             print(f"  [{self.name}] Connecting to 'actions' topic...")
-            for _ in range(5):
-                consumer.consumer.poll(timeout_ms=200)
+            # Increased polling to ensure we are joined and have partitions assigned
+            for _ in range(10):
+                consumer.consumer.poll(timeout_ms=500)
+            
+            # Small extra wait to be absolutely sure
+            time.sleep(1)
             
             # 2. Send request
             payload = {

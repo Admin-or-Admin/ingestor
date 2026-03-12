@@ -10,12 +10,14 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ingestor.adapters.elasticsearch_adapter import ElasticsearchAdapter
 from ingestor.adapters.gns3_adapter import GNS3Adapter
 from ingestor.adapters.mock_logs_adapter import MockLogsAdapter
+from ingestor.adapters.cisco_adapter import CiscoAdapter
 
 # Registry of available adapters
 ADAPTER_MAP = {
     "elasticsearch": ElasticsearchAdapter,
     "gns3": GNS3Adapter,
-    "mock_logs": MockLogsAdapter
+    "mock_logs": MockLogsAdapter,
+    "cisco": CiscoAdapter
 }
 
 def main():
