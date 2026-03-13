@@ -1,3 +1,5 @@
+./shared
+python-json-logger
 elasticsearch>=8.0.0,<9.0.0
 faker
 kafka-python-ng

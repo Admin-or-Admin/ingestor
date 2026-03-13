@@ -1,23 +1,45 @@
-# Use an official Python runtime as a parent image
-FROM python:3.11-slim
+# --- Build Stage ---
+FROM python:3.11-slim AS builder
 
-# Set the working directory in the container
 WORKDIR /app
 
-# Copy the requirements file into the container at /app
-COPY ingestor/requirements.txt ingestor/
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy the shared directory into the container at /app
-COPY shared/ shared/
+# Create virtualenv
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 
-# Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir -r ingestor/requirements.txt
+# Copy shared library
+COPY shared/ ./shared/
+RUN pip install --no-cache-dir --no-build-isolation ./shared/
 
-# Copy the current directory contents into the container at /app
-COPY ingestor/ ingestor/
+# Copy service requirements
+COPY ingestor/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Set the working directory to the service folder
-WORKDIR /app/ingestor
+# --- Runtime Stage ---
+FROM python:3.11-slim
 
-# Run main.py when the container launches
-CMD ["python", "main.py"]
+WORKDIR /app
+
+# Install runtime dependencies for healthchecks
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy virtualenv from builder
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+ENV PYTHONPATH="/app"
+
+# Copy application code
+COPY shared/ ./shared/
+COPY ingestor/ ./ingestor/
+
+# Run application
+CMD ["python", "ingestor/main.py"]
