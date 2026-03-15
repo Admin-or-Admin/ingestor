@@ -36,7 +36,7 @@ class MockLogsAdapter(BaseAdapter):
         message, level, status, source = event["msg"], event["level"], event["status"], event["source"]
 
         return {
-            "timestamp": datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z',
+            "@timestamp": datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z',
             "source": source,
             "log.level": level, "message": message, "service.name": random.choice(services),
             "trace.id": str(uuid.uuid4()), "user.id": self.fake.user_name(),

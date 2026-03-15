@@ -9,7 +9,7 @@ class ElasticsearchAdapter(BaseAdapter):
         super().__init__(name)
         self.es_hosts = [os.getenv("ELASTIC_HOST", "http://localhost:9200")]
         self.es_index = os.getenv("ELASTIC_INDEX", "mock-logs")
-        self.kafka_brokers = [os.getenv("KAFKA_BROKERS", "192.168.1.6:29092")]
+        self.kafka_brokers = [os.getenv("KAFKA_BROKERS", "localhost:29092")]
         self.kafka_topic = os.getenv("KAFKA_TOPIC", "logs.unfiltered")
         self.poll_interval = float(os.getenv("POLL_INTERVAL", "1.0"))
 
